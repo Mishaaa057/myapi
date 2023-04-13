@@ -34,17 +34,19 @@ def get_store_info(store_id):
     return get_data(query)[0]
 
 def get_all_store_products(store_id):
-    query = f"""SELECT p.id, s.name AS store_name, p.price, p.name, p.url
+    query = f"""SELECT p.id, s.id AS store_id, s.name AS store_name, p.price, p.name, p.url
                FROM products p
                JOIN stores s ON p.store_id = s.id
                WHERE s.id = {store_id}"""
     return get_data(query)    
 
 def get_product_info(product_id, store_id):
-    query = f"""SELECT p.id, s.name AS store_name, p.price, p.name, p.url
-               FROM products p
-               JOIN stores s ON p.store_id = s.id
-               WHERE p.id = {product_id} AND s.id = {store_id}"""
+    query = f"""
+        SELECT p.id, s.id AS store_id, p.price, p.name, p.url, s.name AS store_name
+        FROM products p
+        JOIN stores s ON p.store_id = s.id
+        WHERE s.id = {store_id} AND p.id = {product_id};
+    """
     return get_data(query)[0]
 
 print(get_all_stores())
@@ -55,29 +57,46 @@ def stores():
     result = []
 
     for store in get_all_stores():
-        result.append({"id": store[0], "name": store[1], "url": store[2]})
-    return result
+        data = {"id": store[0], "name": store[1], "url": store[2]}
+        result.append(data)
+    return {"data":result, "error":None}
 
 # Show store information by id
 @app.route("/stores/<store_id>", methods=["GET"])
 def stores_id(store_id):
-    store = get_store_info(store_id)
-    return {"id": store[0], "name": store[1], "url": store[2]}
+    try:
+        store = get_store_info(store_id)
+        data = {"id": store[0], "name": store[1], "url": store[2]}
+        return {"data":data, "error":None}
+    except:
+        return {"data":None, "error":"Store with this id not found"}
 
 # Show products of store
 @app.route("/stores/<store_id>/products", methods=["GET"])
 def products_of_store(store_id):
-    result = []
-    products = get_all_store_products(store_id)
-    for product in products:
-        result.append({"id":product[0],"store":product[1], "name":product[2], "url":product[3]})
-    return result
+    try:
+        result = []
+        products = get_all_store_products(store_id)
+        for product in products:
+            result.append({"data":{"id":product[0], "store id":product[1],"price":product[2], "name":product[4], "url":product[5]}, "error":None})
+        if result == []:
+            return {"data":None, "error":"Store with this id not found"}
+        return result
+    except:
+        return {"data":None, "error":"Store with this id not found"}
 
 # Show product information
 @app.route("/stores/<store_id>/products/<product_id>", methods=["GET"])
 def product(store_id, product_id):
-    product = get_product_info(product_id, store_id)
-    # id price store name url
-    return {"id":product[0],"price":product[1], "store":product[2], "name":product[3], "url":product[4]}
+    try:
+        product = get_product_info(product_id, store_id)
+        # id store_id price store name url
+        return {"data":{"id":product[0], "store id":product[1],"price":product[2], "name":product[4], "url":product[5]}, "error":None}
+    except:
+        return {"data":None, "error":"Wrong id providen"}
+    
+@app.errorhandler(404)
+def page_not_found(err):
+    return "Error 404. Page not found, check your url and try again."
 
 
