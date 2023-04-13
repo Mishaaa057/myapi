@@ -77,6 +77,7 @@ def products_of_store(store_id):
 @app.route("/stores/<store_id>/products/<product_id>", methods=["GET"])
 def product(store_id, product_id):
     product = get_product_info(product_id, store_id)
-    return {"id":product[0],"store":product[1], "name":product[2], "url":product[3]}
+    # id price store name url
+    return {"id":product[0],"price":product[1], "store":product[2], "name":product[3], "url":product[4]}
 
 
