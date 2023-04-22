@@ -74,6 +74,16 @@ def is_store_exists(store_id):
     return (execute_query(query) != [])
 
 
+def update_store(store_id, name, url):
+    # Update existing store
+    query = f"""
+        UPDATE stores
+        SET name = '{name}', url = '{url}'
+        WHERE id = {store_id}
+    """
+    return execute_query(query)
+
+
 def new_store_id():
     # Generate new store id
 
@@ -115,19 +125,7 @@ def stores():
     elif request.method == "POST":
         info("Request to create new store")
 
-        # Decode raw post body
-        try:
-            data = request.get_data().decode()
-        except:
-            info("Problem occured during decoding the data", 'r')
-            return
-
-        # Get dictionary data type from raw body
-        try:
-            data = eval(data)
-        except:
-            info("Invalid data provided", 'r')
-            return "Invalid data provided"
+        data = parse_data() # parse data from posted body
         
         if data['name'] and data['url']:
             name = data["name"]
@@ -160,14 +158,67 @@ def stores():
 
 
 # Show store information by id
-@app.route("/stores/<store_id>", methods=["GET"])
+@app.route("/stores/<store_id>", methods=["GET", "PUT"])
 def stores_id(store_id):
+    data = None
+    error = None
+
+    if request.method == "GET":
+        try:
+            store = get_store_info(store_id)
+            data = {"id": store[0], "name": store[1], "url": store[2]}
+            info(f"Store with id: {store_id} was requested")
+            
+        except:
+            error = f"Store with id - {store_id} not found"
+            info(error, "r")
+    
+    # Update existed store
+    elif request.method == "PUT":
+        info(f"Update requested for store with id - {store_id}")
+
+        # Check if store exists
+        if not is_store_exists(store_id):
+            error = f"Store with id {store_id} doesn't exists"
+            return {"data": data, "error": error}
+
+        # Get data
+        data = parse_data()
+        info(f"Parsed data: {data}")
+
+        # Check if everything included
+        if data["name"] and data["url"]:
+            # Update store
+            update_store(store_id, data["name"], data["url"])
+            info(f"Store with id {store_id} updated")
+
+        else:
+            error = "Missing data"
+            info(error, 'r')
+
+    
+    return {"data": data, "error": error}
+
+
+# Get and check converted data from body
+def parse_data():
+    # Get data from body
+    data = None
+    
     try:
-        store = get_store_info(store_id)
-        data = {"id": store[0], "name": store[1], "url": store[2]}
-        return {"data":data, "error":None}
+        data = request.get_data().decode()
     except:
-        return {"data":None, "error":"Store with this id not found"}
+        info("Problem occured during decoding the data", 'r')
+        return "Problem occured during decoding the data"
+
+    # Get dictionary data type from raw body
+    try:
+        data = eval(data)
+    except:
+        info("Invalid data provided", 'r')
+        return "Invalid data provided"
+    
+    return data
 
 
 # Show products of store
@@ -194,44 +245,6 @@ def product(store_id, product_id):
         return {"data":{"id":product[0], "store id":product[1],"price":product[2], "name":product[4], "url":product[5]}, "error":None}
     except:
         return {"data":None, "error":"Wrong id providen"}
-
-
-# Test post method
-# !WRONG!
-@app.route("/add_store", methods=["GET", "POST"])
-def add_store():
-    info("Request to create new store")
-
-    # Get posted data
-    if request.method == "POST":
-        try:
-            id = int(request.args.get("id"))
-            name = request.args.get("name")
-            url = request.args.get("url")
-        except:
-            info(f"Wrong data given", "r")
-            return "Wrong data given"
-
-        store_data = {"id":id, "name":name, "url":url}
-
-        # Check if store with such id already exists
-        if is_store_exists(id):
-            info(f"Store with id {id} already exists", "r")
-            return f"Store with id {id} already exists"
-
-        info(f"New store data: {store_data}")
-
-        try:
-            add_store_to_db(id, name, url)
-            info("New Store Should be created")
-        except Exception as err:
-            info(f"Problem occured - {err}", 'r')
-
-        
-    else:
-        info("Wrong request method", "r")
-
-    return "Request to create new store"
 
 
 @app.errorhandler(404)
