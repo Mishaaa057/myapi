@@ -17,10 +17,12 @@ def execute_query(query):
     cursor.execute(query)
 
     # I Know that it's wrong, but i dont care
+    # I think i will regred it someday...
+    # fetchall is needed for GET method and commit for POST
     try:
         results = cursor.fetchall()
     except:
-        results = None
+        results = []
         cnx.commit()
 
     cursor.close()
@@ -28,13 +30,16 @@ def execute_query(query):
 
     return results
 
+
 def get_all_stores():
     query = "SELECT * FROM stores"
     return execute_query(query)
 
+
 def get_store_info(store_id):
     query = f"SELECT id, name, url FROM stores WHERE id = {store_id}"
     return execute_query(query)[0]
+
 
 def get_all_store_products(store_id):
     query = f"""SELECT p.id, s.id AS store_id, s.name AS store_name, p.price, p.name, p.url
@@ -42,6 +47,7 @@ def get_all_store_products(store_id):
                JOIN stores s ON p.store_id = s.id
                WHERE s.id = {store_id}"""
     return execute_query(query)    
+
 
 def get_product_info(product_id, store_id):
     query = f"""
@@ -52,6 +58,7 @@ def get_product_info(product_id, store_id):
     """
     return execute_query(query)[0]
 
+
 def add_store_to_db(store_id, store_name, store_url):
     query = f"""
         INSERT INTO stores(id, name, url)
@@ -59,13 +66,19 @@ def add_store_to_db(store_id, store_name, store_url):
     """
     return execute_query(query)
 
-print(get_all_stores())
+
+def is_store_exists(store_id):
+    query = f"""
+        SELECT * FROM stores WHERE id = {store_id}
+    """
+    return (execute_query(query) != [])
+
 
 # Show all stores
 @app.route("/stores", methods=["GET"])
 def stores():
     result = []
-
+    
     for store in get_all_stores():
         data = {"id": store[0], "name": store[1], "url": store[2]}
         result.append(data)
@@ -110,19 +123,28 @@ def product(store_id, product_id):
 
 
 # Test post method
-@app.route("/add/store", methods=["GET", "POST"])
+@app.route("/add_store", methods=["GET", "POST"])
 def add_store():
     info("Request to create new store")
 
     # Get posted data
     if request.method == "POST":
-        id = int(request.args.get("id"))
-        name = request.args.get("name")
-        url = request.args.get("url")
+        try:
+            id = int(request.args.get("id"))
+            name = request.args.get("name")
+            url = request.args.get("url")
+        except:
+            info(f"Wrong data given", "r")
+            return "Wrong data given"
 
         store_data = {"id":id, "name":name, "url":url}
 
-        info(f"Posted store data: {store_data}")
+        # Check if store with such id already exists
+        if is_store_exists(id):
+            info(f"Store with id {id} already exists", "r")
+            return f"Store with id {id} already exists"
+
+        info(f"New store data: {store_data}")
 
         try:
             add_store_to_db(id, name, url)
@@ -136,16 +158,18 @@ def add_store():
 
     return "Request to create new store"
 
+
 @app.errorhandler(404)
 def page_not_found(err):
     return "Error 404. Page not found, check your url and try again."
+
 
 # Custom print function for debugging
 def info(msg, color='g'):
     if color == "g":
         print(f"{Fore.GREEN}[INFO]{Fore.RESET} - {msg}")
     elif color == "r":
-        print(f"{Fore.RED}[INFO]{Fore.RESET} - {msg}")
+        print(f"{Fore.RED}[ERROR]{Fore.RESET} - {msg}")
 
 
 if __name__=="__main__":
