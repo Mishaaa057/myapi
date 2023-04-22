@@ -1,10 +1,11 @@
-from flask import Flask
+from flask import Flask, request
 import psycopg2
+from colorama import Fore
 
 
 app = Flask(__name__)
 
-def get_data(query):
+def execute_query(query):
     # establish connection
     cnx = psycopg2.connect(user='postgres', password='qwerty',
                        host='localhost', database='mydb', port='5432')
@@ -15,30 +16,32 @@ def get_data(query):
     # execute query
     cursor.execute(query)
 
-    # fetch results
-    results = cursor.fetchall()
+    # I Know that it's wrong, but i dont care
+    try:
+        results = cursor.fetchall()
+    except:
+        results = None
+        cnx.commit()
 
-    # close cursor and connection
     cursor.close()
     cnx.close()
 
-    # return results
     return results
 
 def get_all_stores():
     query = "SELECT * FROM stores"
-    return get_data(query)
+    return execute_query(query)
 
 def get_store_info(store_id):
     query = f"SELECT id, name, url FROM stores WHERE id = {store_id}"
-    return get_data(query)[0]
+    return execute_query(query)[0]
 
 def get_all_store_products(store_id):
     query = f"""SELECT p.id, s.id AS store_id, s.name AS store_name, p.price, p.name, p.url
                FROM products p
                JOIN stores s ON p.store_id = s.id
                WHERE s.id = {store_id}"""
-    return get_data(query)    
+    return execute_query(query)    
 
 def get_product_info(product_id, store_id):
     query = f"""
@@ -47,7 +50,14 @@ def get_product_info(product_id, store_id):
         JOIN stores s ON p.store_id = s.id
         WHERE s.id = {store_id} AND p.id = {product_id};
     """
-    return get_data(query)[0]
+    return execute_query(query)[0]
+
+def add_store_to_db(store_id, store_name, store_url):
+    query = f"""
+        INSERT INTO stores(id, name, url)
+        VALUES ({store_id}, '{store_name}', '{store_url}')
+    """
+    return execute_query(query)
 
 print(get_all_stores())
 
@@ -61,6 +71,7 @@ def stores():
         result.append(data)
     return {"data":result, "error":None}
 
+
 # Show store information by id
 @app.route("/stores/<store_id>", methods=["GET"])
 def stores_id(store_id):
@@ -70,6 +81,7 @@ def stores_id(store_id):
         return {"data":data, "error":None}
     except:
         return {"data":None, "error":"Store with this id not found"}
+
 
 # Show products of store
 @app.route("/stores/<store_id>/products", methods=["GET"])
@@ -85,6 +97,7 @@ def products_of_store(store_id):
     except:
         return {"data":None, "error":"Store with this id not found"}
 
+
 # Show product information
 @app.route("/stores/<store_id>/products/<product_id>", methods=["GET"])
 def product(store_id, product_id):
@@ -94,9 +107,46 @@ def product(store_id, product_id):
         return {"data":{"id":product[0], "store id":product[1],"price":product[2], "name":product[4], "url":product[5]}, "error":None}
     except:
         return {"data":None, "error":"Wrong id providen"}
-    
+
+
+# Test post method
+@app.route("/add/store", methods=["GET", "POST"])
+def add_store():
+    info("Request to create new store")
+
+    # Get posted data
+    if request.method == "POST":
+        id = int(request.args.get("id"))
+        name = request.args.get("name")
+        url = request.args.get("url")
+
+        store_data = {"id":id, "name":name, "url":url}
+
+        info(f"Posted store data: {store_data}")
+
+        try:
+            add_store_to_db(id, name, url)
+            info("New Store Should be created")
+        except Exception as err:
+            info(f"Problem occured - {err}", 'r')
+
+        
+    else:
+        info("Wrong request method", "r")
+
+    return "Request to create new store"
+
 @app.errorhandler(404)
 def page_not_found(err):
     return "Error 404. Page not found, check your url and try again."
 
+# Custom print function for debugging
+def info(msg, color='g'):
+    if color == "g":
+        print(f"{Fore.GREEN}[INFO]{Fore.RESET} - {msg}")
+    elif color == "r":
+        print(f"{Fore.RED}[INFO]{Fore.RESET} - {msg}")
 
+
+if __name__=="__main__":
+    app.run(debug=True)
